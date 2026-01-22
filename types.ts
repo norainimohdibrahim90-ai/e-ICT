@@ -2,7 +2,8 @@ export enum BookingStatus {
   DRAFT = 'DRAFT',
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED'
+  REJECTED = 'REJECTED',
+  RETURNED = 'RETURNED'
 }
 
 export interface EquipmentConfig {
@@ -11,6 +12,7 @@ export interface EquipmentConfig {
   totalStock: number;
   limitPerBooking: number | null; // null means no limit other than totalStock
   assetCodePrefix: string;
+  imageUrl: string; // New field for dashboard visualization
 }
 
 export interface Booking {
@@ -29,9 +31,10 @@ export interface Booking {
   status: BookingStatus;
   timestamp: number;
   approvedBy?: string; // Name of the admin who approved
+  returnedAt?: string; // Formatted timestamp of when the item was returned
 }
 
-export type ViewState = 'DASHBOARD' | 'BOOKING' | 'ADMIN';
+export type ViewState = 'DASHBOARD' | 'BOOKING' | 'ADMIN' | 'LIST';
 
 // For Charts
 export interface ChartData {

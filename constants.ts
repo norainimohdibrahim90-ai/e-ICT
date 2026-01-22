@@ -21,42 +21,54 @@ export const EQUIPMENT_LIST: EquipmentConfig[] = [
     name: "Laptop",
     totalStock: 21,
     limitPerBooking: null,
-    assetCodePrefix: "LPT"
+    assetCodePrefix: "LPT",
+    // Image: Laptop workspace
+    imageUrl: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=80"
   },
   {
     id: "chromebook",
     name: "Chromebook",
     totalStock: 15,
     limitPerBooking: 5,
-    assetCodePrefix: "CHR"
+    assetCodePrefix: "CHR",
+    // Image: Modern laptop/chromebook usage
+    imageUrl: "https://awsimages.detik.net.id/community/media/visual/2021/04/13/logo-chromebook_169.jpeg?w=700&q=90"
   },
   {
     id: "tablet",
     name: "Samsung Tablet",
     totalStock: 5,
     limitPerBooking: null,
-    assetCodePrefix: "TAB"
+    assetCodePrefix: "TAB",
+    // Image: Tablet/iPad
+    imageUrl: "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?auto=format&fit=crop&w=800&q=80"
   },
   {
     id: "projector_maiwp",
     name: "Projektor MAIWP",
     totalStock: 2,
     limitPerBooking: null,
-    assetCodePrefix: "PRJ-M"
+    assetCodePrefix: "PRJ-M",
+    // Image: Conference room / Projection
+    imageUrl: "https://i0.wp.com/bm.soyacincau.com/wp-content/uploads/2022/06/220630-acer-predator-projector-04.jpg?w=1200&ssl=1"
   },
   {
     id: "projector_kpm",
     name: "Projektor KPM",
     totalStock: 2,
     limitPerBooking: null,
-    assetCodePrefix: "PRJ-K"
+    assetCodePrefix: "PRJ-K",
+    // Image: Classroom/Office Setup
+    imageUrl: "https://i0.wp.com/bm.soyacincau.com/wp-content/uploads/2022/06/220630-acer-predator-projector-04.jpg?w=1200&ssl=1"
   },
   {
     id: "drone",
     name: "Drone",
     totalStock: 1,
     limitPerBooking: null,
-    assetCodePrefix: "DRN"
+    assetCodePrefix: "DRN",
+    // Image: Drone flying
+    imageUrl: "https://images.unsplash.com/photo-1507582020474-9a35b7d455d9?auto=format&fit=crop&w=800&q=80"
   }
 ];
 

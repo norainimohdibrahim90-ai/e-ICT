@@ -1,69 +1,93 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, PlusCircle, ShieldCheck, Sun, Moon, Home, X, Menu } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, PlusCircle, ShieldCheck, Sun, Moon, Home, X, Menu, Loader2, Users } from 'lucide-react';
 import BookingForm from './components/BookingForm';
 import Dashboard from './components/Dashboard';
 import AdminPanel from './components/AdminPanel';
+import BorrowerList from './components/BorrowerList';
 import { Booking, BookingStatus, ViewState } from './types';
-
-// Seed data for better initial visualization
-const SEED_DATA: Booking[] = [
-  {
-    id: "seed1",
-    studentName: "Ahmad Albab",
-    date: new Date().toISOString().split('T')[0],
-    day: "Isnin",
-    startTime: "08:00",
-    endTime: "10:00",
-    className: "4 Ibnu Sina",
-    location: "Makmal Komputer",
-    purpose: "Kelas Coding",
-    equipmentId: "laptop",
-    quantity: 5,
-    assetCodes: ["LPT-1", "LPT-2", "LPT-3", "LPT-4", "LPT-5"],
-    status: BookingStatus.APPROVED,
-    timestamp: Date.now() - 100000,
-    approvedBy: "Cikgu Siti"
-  },
-  {
-    id: "seed2",
-    studentName: "Siti Nurhaliza",
-    date: new Date().toISOString().split('T')[0],
-    day: "Selasa",
-    startTime: "10:00",
-    endTime: "12:00",
-    className: "5 Ibnu Khaldun",
-    location: "Kelas",
-    purpose: "Bentang Slide",
-    equipmentId: "projector_maiwp",
-    quantity: 1,
-    assetCodes: ["PRJ-M-1"],
-    status: BookingStatus.PENDING,
-    timestamp: Date.now()
-  }
-];
+import { 
+  fetchBookingsFromSheet, 
+  createBookingInSheet, 
+  updateBookingStatusInSheet, 
+  deleteBookingInSheet 
+} from './services/googleSheetService';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewState>('DASHBOARD');
-  const [bookings, setBookings] = useState<Booking[]>(SEED_DATA);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isMenuExpanded, setIsMenuExpanded] = useState(false); // Default collapsed
+  const [isMenuExpanded, setIsMenuExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleBookingSubmit = (newBooking: Booking) => {
+  // Load Data from Google Sheet on Mount
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true);
+      const data = await fetchBookingsFromSheet();
+      // Sort by date descending (newest first)
+      const sortedData = data.sort((a, b) => b.timestamp - a.timestamp);
+      setBookings(sortedData);
+      setIsLoading(false);
+    };
+    loadData();
+  }, []);
+
+  const handleBookingSubmit = async (newBooking: Booking) => {
+    // Optimistic UI Update (Instant feedback)
     setBookings(prev => [newBooking, ...prev]);
+    
+    // Background Sync
+    try {
+      await createBookingInSheet(newBooking);
+    } catch (error) {
+      console.error("Failed to save to Google Sheet", error);
+      alert("Amaran: Gagal menyimpan ke database. Sila semak sambungan internet.");
+    }
   };
 
-  const handleBookingStatusUpdate = (id: string, status: BookingStatus, adminName?: string) => {
-    setBookings(prev => prev.map(b => b.id === id ? { ...b, status, approvedBy: adminName } : b));
+  const handleBookingStatusUpdate = async (id: string, status: BookingStatus, adminName?: string) => {
+    // Logic: If status is RETURNED, capture current time
+    let returnedAtStr: string | undefined = undefined;
+    if (status === BookingStatus.RETURNED) {
+       const now = new Date();
+       // Format: "12:30 PM, 15/01/2026"
+       returnedAtStr = now.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true }) + ', ' + now.toLocaleDateString('ms-MY', { day: '2-digit', month: '2-digit', year: 'numeric'});
+    }
+
+    // Optimistic Update
+    setBookings(prev => prev.map(b => 
+      b.id === id 
+        ? { 
+            ...b, 
+            status, 
+            approvedBy: adminName !== undefined ? adminName : b.approvedBy,
+            returnedAt: returnedAtStr || b.returnedAt 
+          } 
+        : b
+    ));
+
+    // Background Sync
+    try {
+      await updateBookingStatusInSheet(id, status, adminName, returnedAtStr);
+    } catch (error) {
+      console.error("Failed to update status", error);
+    }
   };
 
-  const handleDeleteBooking = (id: string) => {
-    // Confirmation handled in AdminPanel modal
+  const handleDeleteBooking = async (id: string) => {
+    // Optimistic Update
     setBookings(prev => prev.filter(b => b.id !== id));
+
+    // Background Sync
+    try {
+      await deleteBookingInSheet(id);
+    } catch (error) {
+      console.error("Failed to delete", error);
+    }
   };
 
   const handleMenuClick = (view: ViewState) => {
     setCurrentView(view);
-    // On mobile, auto-close menu after selection
     if (window.innerWidth < 768) {
       setIsMenuExpanded(false);
     }
@@ -163,6 +187,20 @@ const App: React.FC = () => {
                   <span>Tempahan Baru</span>
                 </button>
 
+                {/* New SENARAI PEMINJAM Button */}
+                <button
+                  onClick={() => handleMenuClick('LIST')}
+                  className={`
+                    w-full flex items-center px-4 py-3 rounded-lg transition-all duration-200 group
+                    ${currentView === 'LIST' 
+                      ? 'text-white bg-red-800 border-l-4 border-yellow-400' 
+                      : 'text-red-100 hover:text-yellow-200 hover:bg-red-800/30'}
+                  `}
+                >
+                  <Users className={`w-5 h-5 mr-3 group-hover:scale-110 transition-transform ${currentView === 'LIST' ? 'text-yellow-400' : ''}`} />
+                  <span className="font-medium">Senarai Peminjam</span>
+                </button>
+
                 <button
                   onClick={() => handleMenuClick('ADMIN')}
                   className={`
@@ -240,6 +278,7 @@ const App: React.FC = () => {
                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">
                     {currentView === 'DASHBOARD' && 'Dashboard'}
                     {currentView === 'BOOKING' && 'Borang Tempahan'}
+                    {currentView === 'LIST' && 'Senarai Peminjam'}
                     {currentView === 'ADMIN' && 'Panel Admin'}
                    </h2>
                    <p className="text-xs text-gray-500 dark:text-gray-400">Selamat Datang ke e-ICT SMA MAIWP Labuan</p>
@@ -247,29 +286,48 @@ const App: React.FC = () => {
                </div>
             </div>
 
-            {currentView === 'DASHBOARD' && (
-              <div className="animate-slideLeft">
-                <Dashboard bookings={bookings} isDarkMode={isDarkMode} />
+            {/* Loading Indicator */}
+            {isLoading && (
+              <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+                <Loader2 className="w-12 h-12 text-red-800 animate-spin mb-4" />
+                <p className="text-gray-500 dark:text-gray-400">Sedang memuat data dari Database...</p>
               </div>
             )}
 
-            {currentView === 'BOOKING' && (
-              <div className="animate-slideLeft">
-                <BookingForm 
-                  onSubmit={handleBookingSubmit}
-                  onSaveDraft={handleBookingSubmit} 
-                />
-              </div>
-            )}
+            {!isLoading && (
+              <>
+                {currentView === 'DASHBOARD' && (
+                  <div className="animate-slideLeft">
+                    <Dashboard bookings={bookings} isDarkMode={isDarkMode} />
+                  </div>
+                )}
 
-            {currentView === 'ADMIN' && (
-              <div className="animate-slideLeft">
-                <AdminPanel 
-                  bookings={bookings} 
-                  onUpdateStatus={handleBookingStatusUpdate} 
-                  onDelete={handleDeleteBooking}
-                />
-              </div>
+                {currentView === 'BOOKING' && (
+                  <div className="animate-slideLeft">
+                    <BookingForm 
+                      onSubmit={handleBookingSubmit}
+                      onSaveDraft={handleBookingSubmit}
+                      existingBookings={bookings}
+                    />
+                  </div>
+                )}
+
+                {currentView === 'LIST' && (
+                  <div className="animate-slideLeft">
+                    <BorrowerList bookings={bookings} />
+                  </div>
+                )}
+
+                {currentView === 'ADMIN' && (
+                  <div className="animate-slideLeft">
+                    <AdminPanel 
+                      bookings={bookings} 
+                      onUpdateStatus={handleBookingStatusUpdate} 
+                      onDelete={handleDeleteBooking}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </main>

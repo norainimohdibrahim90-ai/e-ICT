@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CLASS_LIST, LOCATION_LIST, EQUIPMENT_LIST } from '../constants';
 import { Booking, BookingStatus, EquipmentConfig } from '../types';
 import { Save, Send, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -7,9 +7,10 @@ import { generateBookingReceipt } from '../services/pdfService';
 interface BookingFormProps {
   onSubmit: (booking: Booking) => void;
   onSaveDraft: (booking: Booking) => void;
+  existingBookings: Booking[];
 }
 
-const BookingForm: React.FC<BookingFormProps> = ({ onSubmit, onSaveDraft }) => {
+const BookingForm: React.FC<BookingFormProps> = ({ onSubmit, onSaveDraft, existingBookings }) => {
   const [formData, setFormData] = useState({
     name: '',
     date: '',
@@ -47,10 +48,38 @@ const BookingForm: React.FC<BookingFormProps> = ({ onSubmit, onSaveDraft }) => {
       setFormData(prev => ({
         ...prev,
         quantity: 1,
-        assetCodes: [`${eq.assetCodePrefix}-1`] // Default select first
+        assetCodes: [] // Reset codes, forcing user to pick available ones
       }));
     }
   }, [formData.equipmentId]);
+
+  // COLLISION DETECTION LOGIC
+  const unavailableAssetCodes = useMemo(() => {
+    if (!formData.date || !formData.startTime || !formData.endTime || !formData.equipmentId) {
+      return [];
+    }
+
+    return existingBookings
+      .filter(booking => {
+        // 1. Must be the same equipment type
+        if (booking.equipmentId !== formData.equipmentId) return false;
+
+        // 2. Must be active (Approved or Pending) - Ignore Returned/Rejected
+        if (booking.status === BookingStatus.REJECTED || booking.status === BookingStatus.RETURNED || booking.status === BookingStatus.DRAFT) return false;
+
+        // 3. Date Check
+        if (booking.date !== formData.date) return false;
+
+        // 4. Time Overlap Check
+        // Overlap formula: (StartA < EndB) and (EndA > StartB)
+        // String comparison works for 24h format e.g. "08:00" < "10:00"
+        const isOverlap = (formData.startTime < booking.endTime) && (formData.endTime > booking.startTime);
+        
+        return isOverlap;
+      })
+      .flatMap(booking => booking.assetCodes); // Extract all busy codes
+  }, [existingBookings, formData.date, formData.startTime, formData.endTime, formData.equipmentId]);
+
 
   const handleAssetCodeToggle = (code: string) => {
     setFormData(prev => {
@@ -259,24 +288,40 @@ const BookingForm: React.FC<BookingFormProps> = ({ onSubmit, onSaveDraft }) => {
           {/* Asset Codes Selector */}
           {selectedEquipment && (
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Pilih No Kod Aset:</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                 Pilih No Kod Aset: 
+                 <span className="text-xs font-normal text-red-600 ml-2 italic">
+                   (Butang kelabu bermaksud aset sedang dipinjam pada tarikh/masa tersebut)
+                 </span>
+              </label>
               <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
                 {Array.from({ length: selectedEquipment.totalStock }, (_, i) => i + 1).map(num => {
                   const code = `${selectedEquipment.assetCodePrefix}-${num}`;
                   const isSelected = formData.assetCodes.includes(code);
+                  const isUnavailable = unavailableAssetCodes.includes(code);
+
                   return (
                     <button
                       key={code}
                       type="button"
-                      onClick={() => handleAssetCodeToggle(code)}
+                      disabled={isUnavailable}
+                      onClick={() => !isUnavailable && handleAssetCodeToggle(code)}
                       className={`
-                        text-xs py-2 px-1 rounded border transition-colors font-medium
-                        ${isSelected 
-                          ? 'bg-red-700 text-yellow-100 border-red-700 shadow-md transform scale-105' 
-                          : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-red-50 dark:hover:bg-red-900'}
+                        text-xs py-2 px-1 rounded border transition-all font-medium relative
+                        ${isUnavailable
+                          ? 'bg-gray-200 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60'
+                          : isSelected 
+                            ? 'bg-red-700 text-yellow-100 border-red-700 shadow-md transform scale-105 z-10' 
+                            : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 border-gray-300 dark:border-gray-600 hover:bg-red-50 dark:hover:bg-red-900'}
                       `}
+                      title={isUnavailable ? `Aset ${code} sedang digunakan pada waktu ini` : `Pilih aset ${code}`}
                     >
                       {num}
+                      {isUnavailable && (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                           <div className="w-full h-px bg-gray-500 rotate-45 absolute"></div>
+                        </span>
+                      )}
                     </button>
                   );
                 })}
